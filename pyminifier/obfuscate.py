@@ -10,8 +10,8 @@ from random import shuffle, choice
 from itertools import permutations
 
 # Import our own modules
-from . import analyze
-from . import token_utils
+from pyminifier import analyze
+from pyminifier import token_utils
 
 if not isinstance(sys.version_info, tuple):
     if sys.version_info.major == 3:
@@ -76,7 +76,7 @@ def obfuscation_machine(use_unicode=False, identifier_length=1):
                 yield perm
         identifier_length += 1
 
-def apply_obfuscation(source):
+def apply_obfuscation(source, module):
     """
     Returns 'source' all obfuscated.
     """
@@ -85,17 +85,17 @@ def apply_obfuscation(source):
     tokens = token_utils.listified_tokenizer(source)
     keyword_args = analyze.enumerate_keyword_args(tokens)
     imported_modules = analyze.enumerate_imports(tokens)
-    variables = find_obfuscatables(tokens, obfuscatable_variable)
+    variables = find_obfuscatables(tokens, obfuscatable_variable, ignore_length=True)
     classes = find_obfuscatables(tokens, obfuscatable_class)
     functions = find_obfuscatables(tokens, obfuscatable_function)
     for variable in variables:
         replace_obfuscatables(
-            tokens, obfuscate_variable, variable, name_generator)
+            module, tokens, obfuscate_variable, variable, name_generator)
     for function in functions:
         replace_obfuscatables(
-            tokens, obfuscate_function, function, name_generator)
+            module, tokens, obfuscate_function, function, name_generator)
     for _class in classes:
-        replace_obfuscatables(tokens, obfuscate_class, _class, name_generator)
+        replace_obfuscatables(module, tokens, obfuscate_class, _class, name_generator)
     return token_utils.untokenize(tokens)
 
 def find_obfuscatables(tokens, obfunc, ignore_length=False):
@@ -758,15 +758,40 @@ def obfuscate(module, tokens, options, name_generator=None, table=None):
             obfuscate_builtins(module, tokens, name_generator, table)
 
 if __name__ == "__main__":
+    import json, io, itertools
+
+    md_file = json.load(open("/home/krishnanand/eip_assignment/CS231n-python-numpy-tutorial.ipynb"))
+    allowed_variable_names = ["eip", "mlblr", "eip_in", "eip_out", "mlblr_in", "mlblr_out", "eip_list", "eip_dict"]
+
     global name_generator
-    try:
-        source = open(sys.argv[1]).read()
-    except:
-        print("Usage: %s <filename.py>" % sys.argv[0])
-        sys.exit(1)
-    if sys.version_info[0] == 3:
-        name_generator = obfuscation_machine(use_unicode=True)
-    else:
-        name_generator = obfuscation_machine(identifier_length=1)
-    source = apply_obfuscation(source)
-    print(source)
+    name_generator = itertools.cycle(allowed_variable_names)
+    
+    for cell in md_file["cells"]:
+        idx = 0
+        if cell["cell_type"] == "code":
+            idx = idx +1
+            code_lines = cell["source"]
+            # print(code_lines)
+            lis = []
+            for code in code_lines:
+                if code.endswith("\n"):
+                    lis.append(code[0:-1]+"\n")
+                else:
+                    lis.append(code+"\n")
+            code_as_string = "".join(lis)
+            source = code_as_string
+            try:
+                obfuscated_source_as_string = apply_obfuscation(source, idx)
+                # print(obfuscated_source_as_string)
+                # print ('--------------------------------------')
+                obf_list = obfuscated_source_as_string.split('\n')
+                regenerated_code_lines = [code+'\n' for code in obf_list]
+                cell["source"]= regenerated_code_lines
+                # print (regenerated_code_lines)
+                # break
+            except tokenize.TokenError as t:
+                print(t)
+                print(source)
+                break
+    with open('/home/krishnanand/eip_assignment/changedCS231n-python-numpy-tutorial.ipynb', "w", encoding = "utf-8") as f:
+        json.dump(md_file, f, indent=4)
