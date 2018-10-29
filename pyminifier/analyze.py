@@ -158,6 +158,7 @@ builtins = [
     'reversed',
     'round',
     'set',
+    'self',
     'setattr',
     'slice',
     'sorted',
